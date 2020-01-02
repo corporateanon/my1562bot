@@ -13,8 +13,9 @@ type CommandHandlerArguments struct {
 type CommandHandler func(update *CommandHandlerArguments)
 
 type CommandProcessorRule struct {
-	re      *regexp.Regexp
-	handler CommandHandler
+	re         *regexp.Regexp
+	handler    CommandHandler
+	isCallback bool
 }
 
 type CommandProcessor struct {
@@ -24,15 +25,32 @@ type CommandProcessor struct {
 
 func (cp *CommandProcessor) Hears(reStr string, handler CommandHandler) {
 	re := regexp.MustCompile(reStr)
-	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler})
+	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler, isCallback: false})
+}
+
+func (cp *CommandProcessor) Callback(reStr string, handler CommandHandler) {
+	re := regexp.MustCompile(reStr)
+	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler, isCallback: true})
 }
 
 func (cp *CommandProcessor) Process(update *tgbotapi.Update) {
 	for _, rule := range cp.rules {
-		if update.Message == nil {
-			return
+
+		var data string
+		if rule.isCallback {
+			if update.CallbackQuery == nil {
+				continue
+			}
+			data = update.CallbackQuery.Data
+		} else {
+			if update.Message == nil {
+				continue
+			}
+			data = update.Message.Text
 		}
-		submatches := rule.re.FindStringSubmatch(update.Message.Text)
+
+		submatches := rule.re.FindStringSubmatch(data)
+
 		if len(submatches) > 0 {
 			go rule.handler(&CommandHandlerArguments{
 				update:  update,

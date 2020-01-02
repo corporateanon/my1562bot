@@ -8,7 +8,9 @@ import (
 )
 
 type Config struct {
-	tgToken string
+	tgToken      string
+	dbDriver     string
+	dbConnection string
 }
 
 func NewConfig() (*Config, error) {
@@ -16,5 +18,9 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	return &Config{tgToken: os.Getenv("TELEGRAM_APITOKEN")}, nil
+	return &Config{
+		tgToken:      os.Getenv("TELEGRAM_APITOKEN"),
+		dbDriver:     os.Getenv("DB_DRIVER"),
+		dbConnection: os.Getenv("DB_CONNECTION"),
+	}, nil
 }
