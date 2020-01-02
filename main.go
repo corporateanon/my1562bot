@@ -33,14 +33,8 @@ func main() {
 		commandProcessor.Hears(`^hello`, func(args *CommandHandlerArguments) {
 			fmt.Println(args.matches)
 		})
-
-		for update := range updates {
-			commandProcessor.Process(&update)
-			if update.Message == nil { // ignore any non-Message Updates
-				continue
-			}
-
-			suggs := my1562api.GetStreetSuggestions(update.Message.Text)
+		commandProcessor.Hears(`.+`, func(args *CommandHandlerArguments) {
+			suggs := my1562api.GetStreetSuggestions(args.update.Message.Text)
 			results := make([]string, 0)
 			for index, sugg := range suggs {
 				results = append(results, sugg.Name)
@@ -52,11 +46,15 @@ func main() {
 			if responseText == "" {
 				responseText = "Nothing found"
 			}
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, responseText)
+			msg := tgbotapi.NewMessage(args.update.Message.Chat.ID, responseText)
 
 			if _, err := bot.Send(msg); err != nil {
 				log.Panic(err)
 			}
+		})
+
+		for update := range updates {
+			commandProcessor.Process(&update)
 		}
 	}); err != nil {
 		log.Panic(err)

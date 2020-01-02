@@ -34,10 +34,11 @@ func (cp *CommandProcessor) Process(update *tgbotapi.Update) {
 		}
 		submatches := rule.re.FindStringSubmatch(update.Message.Text)
 		if len(submatches) > 0 {
-			rule.handler(&CommandHandlerArguments{
+			go rule.handler(&CommandHandlerArguments{
 				update:  update,
 				matches: submatches,
 			})
+			break
 		}
 	}
 }
