@@ -1,6 +1,7 @@
-package main
+package models
 
 import (
+	"github.com/corporateanon/my1562bot/pkg/config"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
@@ -19,8 +20,8 @@ type Session struct {
 	StreetID int
 }
 
-func NewDatabase(conf *Config) (*gorm.DB, error) {
-	db, err := gorm.Open(conf.dbDriver, conf.dbConnection)
+func NewDatabase(conf *config.Config) (*gorm.DB, error) {
+	db, err := gorm.Open(conf.DBDriver, conf.DBConnection)
 	if err != nil {
 		return nil, err
 	}
