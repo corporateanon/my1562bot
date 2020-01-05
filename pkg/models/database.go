@@ -20,11 +20,20 @@ type Session struct {
 	StreetID int
 }
 
+type Subscription struct {
+	gorm.Model
+	ChatID     int64
+	StreetID   int
+	Building   string
+	StreetName string
+}
+
+//NewDatabase creates database connection
 func NewDatabase(conf *config.Config) (*gorm.DB, error) {
 	db, err := gorm.Open(conf.DBDriver, conf.DBConnection)
 	if err != nil {
 		return nil, err
 	}
-	db.AutoMigrate(&Session{})
+	db.AutoMigrate(&Session{}, &Subscription{})
 	return db, nil
 }

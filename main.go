@@ -39,16 +39,17 @@ func main() {
 			log.Panic(err)
 		}
 
-		commandProcessor.Hears(`^hello`, func(args *CommandHandlerArguments) {
-			fmt.Println(args.matches)
+		commandProcessor.Hears(`^hello`, func(ctx *CommandHandlerContext) {
+			fmt.Println(ctx.matches)
 		})
-		commandProcessor.Hears(`.+`, func(args *CommandHandlerArguments) {
-			chatID := args.update.Message.Chat.ID
+
+		commandProcessor.Hears(`.+`, func(ctx *CommandHandlerContext) {
+			chatID := ctx.chatID
 			s := sessMgr.NewSession(chatID)
 
 			switch s.GetPhase() {
 			case models.PhaseInit:
-				suggs := my1562api.GetStreetSuggestions(args.update.Message.Text)
+				suggs := my1562api.GetStreetSuggestions(ctx.update.Message.Text)
 				results := make([][]tgbotapi.InlineKeyboardButton, 0)
 
 				for index, sugg := range suggs {
@@ -74,47 +75,65 @@ func main() {
 
 			case models.PhaseEnterBuilding:
 				streetID := s.GetStreetID()
-				building := args.update.Message.Text
+				building := ctx.update.Message.Text
 
 				s.SetPhase(models.PhaseInit)
 				s.SetStreetID(0)
 				s.Save()
 
-				msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Your selection: %d,%s", streetID, building))
-				if _, err := bot.Send(msg); err != nil {
+				street := my1562api.GetStreetByID(streetID)
+				if street == nil {
+					if _, err := bot.Send(tgbotapi.NewMessage(chatID, "Error")); err != nil {
+						log.Panic(err)
+					}
+					return
+				}
+
+				subscription := &models.Subscription{
+					ChatID:     chatID,
+					StreetID:   streetID,
+					Building:   building,
+					StreetName: street.Name,
+				}
+				db.Save(subscription)
+
+				if _, err := bot.Send(
+					tgbotapi.NewMessage(
+						chatID,
+						fmt.Sprintf("Your selection: %s, %s", street.Name, building),
+					),
+				); err != nil {
 					log.Panic(err)
 				}
 			}
-
 		})
 
-		commandProcessor.Callback(`init:`, func(args *CommandHandlerArguments) {
-			chatID := args.update.CallbackQuery.Message.Chat.ID
-			sess := models.Session{ChatID: chatID}
-			db.Where(models.Session{ChatID: chatID}).FirstOrCreate(&sess)
-			db.Model(&sess).Updates(map[string]interface{}{
-				"Phase":    models.PhaseInit,
-				"StreetID": 0,
-			})
+		commandProcessor.Callback(`init:`, func(ctx *CommandHandlerContext) {
+			chatID := ctx.chatID
+
+			s := sessMgr.NewSession(chatID)
+			s.SetPhase(models.PhaseInit)
+			s.SetStreetID(0)
+			s.Save()
+
 			msg := tgbotapi.NewMessage(chatID, "Enter your street")
 			if _, err := bot.Send(msg); err != nil {
 				log.Panic(err)
 			}
 		})
 
-		commandProcessor.Callback(`street:(\d+)`, func(args *CommandHandlerArguments) {
-			chatID := args.update.CallbackQuery.Message.Chat.ID
-			streetID, err := strconv.ParseInt(args.matches[1], 10, 64)
+		commandProcessor.Callback(`street:(\d+)`, func(ctx *CommandHandlerContext) {
+			chatID := ctx.chatID
+			streetID, err := strconv.ParseInt(ctx.matches[1], 10, 64)
 			if err != nil {
 				log.Panic(err)
 			}
 
-			sess := models.Session{ChatID: chatID}
-			db.Where(models.Session{ChatID: chatID}).FirstOrCreate(&sess)
-			db.Model(&sess).Updates(map[string]interface{}{
-				"Phase":    models.PhaseEnterBuilding,
-				"StreetID": streetID,
-			})
+			s := sessMgr.NewSession(chatID)
+			s.SetPhase(models.PhaseEnterBuilding)
+			s.SetStreetID(int(streetID))
+			s.Save()
+
 			msg := tgbotapi.NewMessage(chatID, "Enter building number (e.g. 10)")
 			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 				tgbotapi.NewInlineKeyboardRow(
@@ -125,6 +144,17 @@ func main() {
 				),
 			)
 			if _, err := bot.Send(msg); err != nil {
+				log.Panic(err)
+			}
+		})
+
+		commandProcessor.Command(`list`, func(ctx *CommandHandlerContext) {
+			var subscriptions []models.Subscription
+			db.Where(&models.Subscription{ChatID: ctx.chatID}).Find(&subscriptions)
+
+			message := fmt.Sprintf("Number of subs: %d", len(subscriptions))
+
+			if _, err := bot.Send(tgbotapi.NewMessage(ctx.chatID, message)); err != nil {
 				log.Panic(err)
 			}
 		})
