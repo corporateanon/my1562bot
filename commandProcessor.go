@@ -6,16 +6,25 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-type CommandHandlerArguments struct {
+type RuleType uint8
+
+const (
+	Hears RuleType = iota
+	Callback
+	Command
+)
+
+type CommandHandlerContext struct {
 	update  *tgbotapi.Update
+	chatID  int64
 	matches []string
 }
-type CommandHandler func(update *CommandHandlerArguments)
+type CommandHandler func(update *CommandHandlerContext)
 
 type CommandProcessorRule struct {
-	re         *regexp.Regexp
-	handler    CommandHandler
-	isCallback bool
+	re       *regexp.Regexp
+	handler  CommandHandler
+	ruleType RuleType
 }
 
 type CommandProcessor struct {
@@ -25,36 +34,52 @@ type CommandProcessor struct {
 
 func (cp *CommandProcessor) Hears(reStr string, handler CommandHandler) {
 	re := regexp.MustCompile(reStr)
-	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler, isCallback: false})
+	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler, ruleType: Hears})
 }
 
 func (cp *CommandProcessor) Callback(reStr string, handler CommandHandler) {
 	re := regexp.MustCompile(reStr)
-	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler, isCallback: true})
+	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler, ruleType: Callback})
+}
+
+func (cp *CommandProcessor) Command(reStr string, handler CommandHandler) {
+	re := regexp.MustCompile(reStr)
+	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler, ruleType: Command})
 }
 
 func (cp *CommandProcessor) Process(update *tgbotapi.Update) {
 	for _, rule := range cp.rules {
 
 		var data string
-		if rule.isCallback {
+		var chatID int64
+		switch rule.ruleType {
+		case Callback:
 			if update.CallbackQuery == nil {
 				continue
 			}
 			data = update.CallbackQuery.Data
-		} else {
-			if update.Message == nil {
+			chatID = update.CallbackQuery.Message.Chat.ID
+		case Hears:
+			if update.Message == nil || update.Message.IsCommand() {
 				continue
 			}
 			data = update.Message.Text
+			chatID = update.Message.Chat.ID
+		case Command:
+			if update.Message == nil || !update.Message.IsCommand() {
+				continue
+			}
+			data = update.Message.Command()
+			chatID = update.Message.Chat.ID
 		}
 
 		submatches := rule.re.FindStringSubmatch(data)
 
 		if len(submatches) > 0 {
-			go rule.handler(&CommandHandlerArguments{
+			go rule.handler(&CommandHandlerContext{
 				update:  update,
 				matches: submatches,
+				chatID:  chatID,
 			})
 			break
 		}

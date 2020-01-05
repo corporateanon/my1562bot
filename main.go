@@ -6,6 +6,9 @@ import (
 	"strconv"
 
 	"github.com/corporateanon/my1562api"
+	"github.com/corporateanon/my1562bot/pkg/config"
+	"github.com/corporateanon/my1562bot/pkg/models"
+	"github.com/corporateanon/my1562bot/pkg/sessionmanager"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/jinzhu/gorm"
 	"go.uber.org/dig"
@@ -14,15 +17,17 @@ import (
 func main() {
 
 	c := dig.New()
-	c.Provide(NewConfig)
+	c.Provide(config.NewConfig)
 	c.Provide(NewBotAPI)
 	c.Provide(NewCommandProcessor)
-	c.Provide(NewDatabase)
+	c.Provide(models.NewDatabase)
+	c.Provide(sessionmanager.NewSessionManager)
 
 	if err := c.Invoke(func(
 		bot *tgbotapi.BotAPI,
 		commandProcessor *CommandProcessor,
 		db *gorm.DB,
+		sessMgr *sessionmanager.SessionManager,
 	) {
 		defer db.Close()
 		log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -34,18 +39,17 @@ func main() {
 			log.Panic(err)
 		}
 
-		commandProcessor.Hears(`^hello`, func(args *CommandHandlerArguments) {
-			fmt.Println(args.matches)
+		commandProcessor.Hears(`^hello`, func(ctx *CommandHandlerContext) {
+			fmt.Println(ctx.matches)
 		})
-		commandProcessor.Hears(`.+`, func(args *CommandHandlerArguments) {
-			chatID := args.update.Message.Chat.ID
 
-			sess := Session{ChatID: chatID}
-			db.Where(Session{ChatID: chatID}).FirstOrCreate(&sess)
+		commandProcessor.Hears(`.+`, func(ctx *CommandHandlerContext) {
+			chatID := ctx.chatID
+			s := sessMgr.NewSession(chatID)
 
-			switch sess.Phase {
-			case PhaseInit:
-				suggs := my1562api.GetStreetSuggestions(args.update.Message.Text)
+			switch s.GetPhase() {
+			case models.PhaseInit:
+				suggs := my1562api.GetStreetSuggestions(ctx.update.Message.Text)
 				results := make([][]tgbotapi.InlineKeyboardButton, 0)
 
 				for index, sugg := range suggs {
@@ -69,48 +73,67 @@ func main() {
 					log.Panic(err)
 				}
 
-			case PhaseEnterBuilding:
-				streetID := sess.StreetID
-				building := args.update.Message.Text
-				db.Model(&sess).Updates(map[string]interface{}{
-					"Phase":    PhaseInit,
-					"StreetID": 0,
-				})
-				msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Your selection: %d,%s", streetID, building))
-				if _, err := bot.Send(msg); err != nil {
+			case models.PhaseEnterBuilding:
+				streetID := s.GetStreetID()
+				building := ctx.update.Message.Text
+
+				s.SetPhase(models.PhaseInit)
+				s.SetStreetID(0)
+				s.Save()
+
+				street := my1562api.GetStreetByID(streetID)
+				if street == nil {
+					if _, err := bot.Send(tgbotapi.NewMessage(chatID, "Error")); err != nil {
+						log.Panic(err)
+					}
+					return
+				}
+
+				subscription := &models.Subscription{
+					ChatID:     chatID,
+					StreetID:   streetID,
+					Building:   building,
+					StreetName: street.Name,
+				}
+				db.Save(subscription)
+
+				if _, err := bot.Send(
+					tgbotapi.NewMessage(
+						chatID,
+						fmt.Sprintf("Your selection: %s, %s", street.Name, building),
+					),
+				); err != nil {
 					log.Panic(err)
 				}
 			}
-
 		})
 
-		commandProcessor.Callback(`init:`, func(args *CommandHandlerArguments) {
-			chatID := args.update.CallbackQuery.Message.Chat.ID
-			sess := Session{ChatID: chatID}
-			db.Where(Session{ChatID: chatID}).FirstOrCreate(&sess)
-			db.Model(&sess).Updates(map[string]interface{}{
-				"Phase":    PhaseInit,
-				"StreetID": 0,
-			})
+		commandProcessor.Callback(`init:`, func(ctx *CommandHandlerContext) {
+			chatID := ctx.chatID
+
+			s := sessMgr.NewSession(chatID)
+			s.SetPhase(models.PhaseInit)
+			s.SetStreetID(0)
+			s.Save()
+
 			msg := tgbotapi.NewMessage(chatID, "Enter your street")
 			if _, err := bot.Send(msg); err != nil {
 				log.Panic(err)
 			}
 		})
 
-		commandProcessor.Callback(`street:(\d+)`, func(args *CommandHandlerArguments) {
-			chatID := args.update.CallbackQuery.Message.Chat.ID
-			streetID, err := strconv.ParseInt(args.matches[1], 10, 64)
+		commandProcessor.Callback(`street:(\d+)`, func(ctx *CommandHandlerContext) {
+			chatID := ctx.chatID
+			streetID, err := strconv.ParseInt(ctx.matches[1], 10, 64)
 			if err != nil {
 				log.Panic(err)
 			}
 
-			sess := Session{ChatID: chatID}
-			db.Where(Session{ChatID: chatID}).FirstOrCreate(&sess)
-			db.Model(&sess).Updates(map[string]interface{}{
-				"Phase":    PhaseEnterBuilding,
-				"StreetID": streetID,
-			})
+			s := sessMgr.NewSession(chatID)
+			s.SetPhase(models.PhaseEnterBuilding)
+			s.SetStreetID(int(streetID))
+			s.Save()
+
 			msg := tgbotapi.NewMessage(chatID, "Enter building number (e.g. 10)")
 			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 				tgbotapi.NewInlineKeyboardRow(
@@ -121,6 +144,17 @@ func main() {
 				),
 			)
 			if _, err := bot.Send(msg); err != nil {
+				log.Panic(err)
+			}
+		})
+
+		commandProcessor.Command(`list`, func(ctx *CommandHandlerContext) {
+			var subscriptions []models.Subscription
+			db.Where(&models.Subscription{ChatID: ctx.chatID}).Find(&subscriptions)
+
+			message := fmt.Sprintf("Number of subs: %d", len(subscriptions))
+
+			if _, err := bot.Send(tgbotapi.NewMessage(ctx.chatID, message)); err != nil {
 				log.Panic(err)
 			}
 		})

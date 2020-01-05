@@ -1,9 +1,12 @@
 package main
 
-import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+import (
+	"github.com/corporateanon/my1562bot/pkg/config"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+)
 
-func NewBotAPI(conf *Config) (*tgbotapi.BotAPI, error) {
-	api, err := tgbotapi.NewBotAPI(conf.tgToken)
+func NewBotAPI(conf *config.Config) (*tgbotapi.BotAPI, error) {
+	api, err := tgbotapi.NewBotAPI(conf.TGToken)
 	if err != nil {
 		return nil, err
 	}
