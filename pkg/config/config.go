@@ -14,7 +14,14 @@ type Config struct {
 }
 
 func NewConfig() (*Config, error) {
-	err := godotenv.Load()
+	envFile := ".env"
+
+	injectedEnvFile := os.Getenv("ENV_FILE")
+	if injectedEnvFile != "" {
+		envFile = injectedEnvFile
+	}
+
+	err := godotenv.Load(envFile)
 	if err != nil {
 		fmt.Println(err)
 	}
