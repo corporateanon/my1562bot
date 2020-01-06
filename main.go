@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 
 	"github.com/corporateanon/my1562api"
 	"github.com/corporateanon/my1562bot/pkg/config"
@@ -63,9 +64,9 @@ func main() {
 						break
 					}
 				}
-				msg := tgbotapi.NewMessage(chatID, "Nothing found")
+				msg := tgbotapi.NewMessage(chatID, "Нічого не знайдено")
 				if len(results) > 0 {
-					msg.Text = "Select your street"
+					msg.Text = "Оберіть вулицю"
 					msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(results...)
 				}
 
@@ -100,7 +101,7 @@ func main() {
 				if _, err := bot.Send(
 					tgbotapi.NewMessage(
 						chatID,
-						fmt.Sprintf("Your selection: %s, %s", street.Name, building),
+						fmt.Sprintf("Ви обрали адресу: %s, %s", street.Name, building),
 					),
 				); err != nil {
 					log.Panic(err)
@@ -116,7 +117,7 @@ func main() {
 			s.SetStreetID(0)
 			s.Save()
 
-			msg := tgbotapi.NewMessage(chatID, "Enter your street")
+			msg := tgbotapi.NewMessage(chatID, "Введіть назву вулиці")
 			if _, err := bot.Send(msg); err != nil {
 				log.Panic(err)
 			}
@@ -134,11 +135,11 @@ func main() {
 			s.SetStreetID(int(streetID))
 			s.Save()
 
-			msg := tgbotapi.NewMessage(chatID, "Enter building number (e.g. 10)")
+			msg := tgbotapi.NewMessage(chatID, "Введіть номер будинку (наприклад, 10)")
 			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 				tgbotapi.NewInlineKeyboardRow(
 					tgbotapi.NewInlineKeyboardButtonData(
-						"Search other street",
+						"...або шукати іншу вулицю",
 						"init:",
 					),
 				),
@@ -148,15 +149,47 @@ func main() {
 			}
 		})
 
-		commandProcessor.Command(`list`, func(ctx *CommandHandlerContext) {
+		showSubscriptionsList := func(ctx *CommandHandlerContext) {
 			var subscriptions []models.Subscription
 			db.Where(&models.Subscription{ChatID: ctx.chatID}).Find(&subscriptions)
 
-			message := fmt.Sprintf("Number of subs: %d", len(subscriptions))
+			message := tgbotapi.NewMessage(ctx.chatID, "Підписки вітсутні")
 
-			if _, err := bot.Send(tgbotapi.NewMessage(ctx.chatID, message)); err != nil {
+			if lens := len(subscriptions); lens != 0 {
+				buttons := make([]tgbotapi.InlineKeyboardButton, lens)
+
+				lines := make([]string, len(subscriptions))
+				for i, sub := range subscriptions {
+					lines[i] = fmt.Sprintf("%d) %s, %s", i+1, sub.StreetName, sub.Building)
+					buttons[i] = tgbotapi.NewInlineKeyboardButtonData(
+						fmt.Sprintf("Видалити %d)", i+1),
+						fmt.Sprintf("subdel:%d", sub.ID),
+					)
+				}
+				message.Text = strings.Join(lines, "\n")
+				message.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(wrapButtons(2, buttons)...)
+			}
+
+			if _, err := bot.Send(message); err != nil {
 				log.Panic(err)
 			}
+		}
+
+		commandProcessor.Command("list", showSubscriptionsList)
+		commandProcessor.Callback(`subdel:(\d+)`, func(ctx *CommandHandlerContext) {
+			chatID := ctx.chatID
+			id, err := strconv.ParseInt(ctx.matches[1], 10, 64)
+			if err != nil {
+				log.Panic("Could not parse")
+			}
+			sub := &models.Subscription{}
+			db.Where("id = ? AND chat_id = ?", id, chatID).First(sub)
+			db.Delete(sub)
+			bot.DeleteMessage(tgbotapi.NewDeleteMessage(
+				chatID,
+				ctx.update.CallbackQuery.Message.MessageID,
+			))
+			showSubscriptionsList(ctx)
 		})
 
 		for update := range updates {
@@ -165,4 +198,22 @@ func main() {
 	}); err != nil {
 		log.Panic(err)
 	}
+}
+
+func wrapButtons(width int, buttons []tgbotapi.InlineKeyboardButton) [][]tgbotapi.InlineKeyboardButton {
+	rowcount := len(buttons)/width + 1
+	if len(buttons) == 0 {
+		rowcount = 0
+	}
+	rows := make([][]tgbotapi.InlineKeyboardButton, rowcount)
+	for i := 0; i < rowcount; i++ {
+		lower := i * width
+		upper := lower + width
+		if upper > len(buttons) {
+			upper = len(buttons)
+		}
+		slice := buttons[lower:upper]
+		rows[i] = slice
+	}
+	return rows
 }
