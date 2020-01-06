@@ -153,7 +153,7 @@ func main() {
 			var subscriptions []models.Subscription
 			db.Where(&models.Subscription{ChatID: ctx.chatID}).Find(&subscriptions)
 
-			message := tgbotapi.NewMessage(ctx.chatID, "Підписки вітсутні")
+			message := tgbotapi.NewMessage(ctx.chatID, "Підписки відсутні")
 
 			if lens := len(subscriptions); lens != 0 {
 				buttons := make([]tgbotapi.InlineKeyboardButton, lens)
