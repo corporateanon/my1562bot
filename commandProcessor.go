@@ -12,6 +12,7 @@ const (
 	Hears RuleType = iota
 	Callback
 	Command
+	Location
 )
 
 type CommandHandlerContext struct {
@@ -47,6 +48,10 @@ func (cp *CommandProcessor) Command(reStr string, handler CommandHandler) {
 	cp.rules = append(cp.rules, &CommandProcessorRule{re: re, handler: handler, ruleType: Command})
 }
 
+func (cp *CommandProcessor) Location(handler CommandHandler) {
+	cp.rules = append(cp.rules, &CommandProcessorRule{handler: handler, ruleType: Location})
+}
+
 func (cp *CommandProcessor) Process(update *tgbotapi.Update) {
 	for _, rule := range cp.rules {
 
@@ -59,18 +64,31 @@ func (cp *CommandProcessor) Process(update *tgbotapi.Update) {
 			}
 			data = update.CallbackQuery.Data
 			chatID = update.CallbackQuery.Message.Chat.ID
+
 		case Hears:
 			if update.Message == nil || update.Message.IsCommand() {
 				continue
 			}
 			data = update.Message.Text
 			chatID = update.Message.Chat.ID
+
 		case Command:
 			if update.Message == nil || !update.Message.IsCommand() {
 				continue
 			}
 			data = update.Message.Command()
 			chatID = update.Message.Chat.ID
+
+		case Location:
+			if update.Message == nil || update.Message.Location == nil {
+				continue
+			}
+			chatID = update.Message.Chat.ID
+			go rule.handler(&CommandHandlerContext{
+				update: update,
+				chatID: chatID,
+			})
+			continue
 		}
 
 		submatches := rule.re.FindStringSubmatch(data)
