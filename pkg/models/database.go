@@ -23,8 +23,9 @@ type Session struct {
 
 type Subscription struct {
 	gorm.Model
-	ChatID    int64
-	AddressID uint
+	ChatID       int64
+	AddressIDAr  uint32
+	StreetID1562 uint32
 }
 
 type Address struct {

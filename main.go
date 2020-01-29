@@ -126,7 +126,10 @@ func main() {
 			results := make([][]tgbotapi.InlineKeyboardButton, len(geocodingResults))
 			for i, geoRes := range geocodingResults {
 				results[i] = tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData(FormatShortAddress(geoRes), "aaa"),
+					tgbotapi.NewInlineKeyboardButtonData(
+						FormatGeocodingResult(geoRes),
+						fmt.Sprintf("subAddr:%d", geoRes.FullAddress.Address.ID),
+					),
 				)
 			}
 
@@ -136,6 +139,21 @@ func main() {
 			if _, err := bot.Send(msg); err != nil {
 				log.Panic(err)
 			}
+		})
+		commandProcessor.Callback(`subAddr:(\d+)`, func(ctx *CommandHandlerContext) {
+			fmt.Println(ctx.matches)
+			addressIDAr, err := strconv.ParseUint(ctx.matches[1], 10, 64)
+			if err != nil {
+				panic(err)
+			}
+			addr := geo.AddressByID(uint32(addressIDAr))
+			// var subscriptions []models.Subscription
+			subscription := &models.Subscription{
+				ChatID:       ctx.chatID,
+				AddressIDAr:  addr.Address.ID,
+				StreetID1562: addr.Street1562.ID,
+			}
+			db.Save(subscription)
 
 		})
 

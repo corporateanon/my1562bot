@@ -13,7 +13,7 @@ func NewGeocoder(conf *config.Config) (*my1562geocoder.Geocoder, error) {
 	return geo, nil
 }
 
-func FormatShortAddress(res *my1562geocoder.ReverseGeocodingResult) string {
+func FormatGeocodingResult(res *my1562geocoder.ReverseGeocodingResult) string {
 	street := res.FullAddress.Street1562.Name
 	building := res.FullAddress.Address.Number
 	return fmt.Sprintf("%s %d", street, building)
