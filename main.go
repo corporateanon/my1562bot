@@ -36,7 +36,7 @@ func main() {
 		commandProcessor *CommandProcessor,
 		db *gorm.DB,
 		sessMgr *sessionmanager.SessionManager,
-		geo *my1562geocoder.Geocoder,
+		geo *geocoder.Geocoder,
 		api *apiclient.ApiClient,
 	) {
 		defer db.Close()
