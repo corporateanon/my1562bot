@@ -5,10 +5,10 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/corporateanon/my1562geocoder"
 	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/jinzhu/gorm"
+	"github.com/my1562/geocoder"
 	"github.com/my1562/telegrambot/pkg/apiclient"
 	"github.com/my1562/telegrambot/pkg/config"
 	"github.com/my1562/telegrambot/pkg/models"

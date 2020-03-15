@@ -24,8 +24,8 @@ github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDk
 github.com/corporateanon/my1562api v0.0.0-20200103221429-028fbed046c2 h1:7+rPPN+VpMp7KobcnrAVEawSz3xMaZg43qwC7aJaZRc=
 github.com/corporateanon/my1562api v0.0.0-20200103221429-028fbed046c2/go.mod h1:hH++fa7A1TC5lsY+5/DsKF2d170ukHhmDEBboE0g0yg=
 github.com/corporateanon/my1562bot v0.0.0-20200129203754-217184029af6/go.mod h1:9pvIYfjKxKLdb6BRM+hJ/aKmZol9Eq4CRppdr6zN/0E=
-github.com/corporateanon/my1562geocoder v0.1.2 h1:OTjW9lbl7aRmAY1YUwFn4MOhqTMtYvfC9IxnMEgdsm4=
-github.com/corporateanon/my1562geocoder v0.1.2/go.mod h1:CvPVZCP0B4TAE1/3TrgtBWDH1RYYNsNcspNdlqs1Nrw=
+github.com/my1562/geocoder v0.1.2 h1:OTjW9lbl7aRmAY1YUwFn4MOhqTMtYvfC9IxnMEgdsm4=
+github.com/my1562/geocoder v0.1.2/go.mod h1:CvPVZCP0B4TAE1/3TrgtBWDH1RYYNsNcspNdlqs1Nrw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

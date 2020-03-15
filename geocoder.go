@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/my1562/geocoder"
 	"github.com/my1562/telegrambot/pkg/config"
-	"github.com/corporateanon/my1562geocoder"
 )
 
 func NewGeocoder(conf *config.Config) (*my1562geocoder.Geocoder, error) {

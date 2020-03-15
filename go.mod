@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/corporateanon/my1562api v0.0.0-20200103221429-028fbed046c2
-	github.com/corporateanon/my1562geocoder v0.1.2
+	github.com/my1562/geocoder v0.1.2
 	github.com/go-resty/resty/v2 v2.2.0
 	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
 	github.com/jinzhu/gorm v1.9.12
