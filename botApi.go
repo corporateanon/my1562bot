@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/corporateanon/my1562bot/pkg/config"
+	"github.com/my1562/telegrambot/pkg/config"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 

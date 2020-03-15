@@ -5,13 +5,14 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/corporateanon/my1562api"
-	"github.com/corporateanon/my1562bot/pkg/config"
-	"github.com/corporateanon/my1562bot/pkg/models"
-	"github.com/corporateanon/my1562bot/pkg/sessionmanager"
 	"github.com/corporateanon/my1562geocoder"
+	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/jinzhu/gorm"
+	"github.com/my1562/telegrambot/pkg/apiclient"
+	"github.com/my1562/telegrambot/pkg/config"
+	"github.com/my1562/telegrambot/pkg/models"
+	"github.com/my1562/telegrambot/pkg/sessionmanager"
 	"go.uber.org/dig"
 )
 
@@ -24,6 +25,11 @@ func main() {
 	c.Provide(models.NewDatabase)
 	c.Provide(sessionmanager.NewSessionManager)
 	c.Provide(NewGeocoder)
+	c.Provide(func(conf *config.Config) *resty.Client {
+		client := resty.New().SetHostURL(conf.APIURL)
+		return client
+	})
+	c.Provide(apiclient.New)
 
 	if err := c.Invoke(func(
 		bot *tgbotapi.BotAPI,
@@ -31,6 +37,7 @@ func main() {
 		db *gorm.DB,
 		sessMgr *sessionmanager.SessionManager,
 		geo *my1562geocoder.Geocoder,
+		api *apiclient.ApiClient,
 	) {
 		defer db.Close()
 		log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -44,79 +51,6 @@ func main() {
 
 		commandProcessor.Hears(`^hello`, func(ctx *CommandHandlerContext) {
 			fmt.Println(ctx.matches)
-		})
-
-		commandProcessor.Hears(`.+`, func(ctx *CommandHandlerContext) {
-			chatID := ctx.chatID
-			s := sessMgr.NewSession(chatID)
-
-			switch s.GetPhase() {
-			case models.PhaseInit:
-				suggs := my1562api.GetStreetSuggestions(ctx.update.Message.Text)
-				results := make([][]tgbotapi.InlineKeyboardButton, 0)
-
-				for index, sugg := range suggs {
-					results = append(results,
-						tgbotapi.NewInlineKeyboardRow(
-							tgbotapi.NewInlineKeyboardButtonData(
-								sugg.Name,
-								fmt.Sprintf("street:%d", sugg.ID),
-							)))
-					if index > 10 {
-						break
-					}
-				}
-				msg := tgbotapi.NewMessage(chatID, "Нічого не знайдено")
-				if len(results) > 0 {
-					msg.Text = "Оберіть вулицю"
-					msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(results...)
-				}
-
-				if _, err := bot.Send(msg); err != nil {
-					log.Panic(err)
-				}
-
-			case models.PhaseEnterBuilding:
-				streetID := s.GetStreetID()
-				building := ctx.update.Message.Text
-
-				s.SetPhase(models.PhaseInit)
-				s.SetStreetID(0)
-				s.Save()
-
-				street := my1562api.GetStreetByID(streetID)
-				if street == nil {
-					if _, err := bot.Send(tgbotapi.NewMessage(chatID, "Error")); err != nil {
-						log.Panic(err)
-					}
-					return
-				}
-
-				address := &models.Address{
-					StreetID:   streetID,
-					Building:   building,
-					StreetName: street.Name,
-				}
-
-				db.Where(address).FirstOrCreate(address)
-
-				subscription := &models.Subscription{
-					ChatID: chatID,
-				}
-				db.Save(subscription)
-
-				address.Subscriptions = append(address.Subscriptions, *subscription)
-				db.Save(address)
-
-				if _, err := bot.Send(
-					tgbotapi.NewMessage(
-						chatID,
-						fmt.Sprintf("Ви обрали адресу: %s, %s", street.Name, building),
-					),
-				); err != nil {
-					log.Panic(err)
-				}
-			}
 		})
 
 		commandProcessor.Location(func(ctx *CommandHandlerContext) {
@@ -142,103 +76,22 @@ func main() {
 		})
 		commandProcessor.Callback(`subAddr:(\d+)`, func(ctx *CommandHandlerContext) {
 			fmt.Println(ctx.matches)
+
 			addressIDAr, err := strconv.ParseUint(ctx.matches[1], 10, 64)
 			if err != nil {
 				panic(err)
 			}
+
 			addr := geo.AddressByID(uint32(addressIDAr))
-			// var subscriptions []models.Subscription
-			subscription := &models.Subscription{
-				ChatID:       ctx.chatID,
-				AddressIDAr:  addr.Address.ID,
-				StreetID1562: addr.Street1562.ID,
+			if addr == nil {
+				panic("No such address") //TODO: send it as a message
 			}
-			db.Save(subscription)
 
-		})
-
-		commandProcessor.Callback(`init:`, func(ctx *CommandHandlerContext) {
-			chatID := ctx.chatID
-
-			s := sessMgr.NewSession(chatID)
-			s.SetPhase(models.PhaseInit)
-			s.SetStreetID(0)
-			s.Save()
-
-			msg := tgbotapi.NewMessage(chatID, "Введіть назву вулиці")
-			if _, err := bot.Send(msg); err != nil {
-				log.Panic(err)
-			}
-		})
-
-		commandProcessor.Callback(`street:(\d+)`, func(ctx *CommandHandlerContext) {
-			chatID := ctx.chatID
-			streetID, err := strconv.ParseInt(ctx.matches[1], 10, 64)
+			err = api.CreateSubscription(ctx.chatID, int64(addr.Address.ID))
 			if err != nil {
-				log.Panic(err)
-			}
-
-			s := sessMgr.NewSession(chatID)
-			s.SetPhase(models.PhaseEnterBuilding)
-			s.SetStreetID(int(streetID))
-			s.Save()
-
-			msg := tgbotapi.NewMessage(chatID, "Введіть номер будинку (наприклад, 10)")
-			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData(
-						"...або шукати іншу вулицю",
-						"init:",
-					),
-				),
-			)
-			if _, err := bot.Send(msg); err != nil {
-				log.Panic(err)
+				panic(err)
 			}
 		})
-
-		// showSubscriptionsList := func(ctx *CommandHandlerContext) {
-		// 	var subscriptions []models.Subscription
-		// 	db.Where(&models.Subscription{ChatID: ctx.chatID}).Find(&subscriptions)
-
-		// 	message := tgbotapi.NewMessage(ctx.chatID, "Підписки відсутні")
-
-		// 	if lens := len(subscriptions); lens != 0 {
-		// 		buttons := make([]tgbotapi.InlineKeyboardButton, lens)
-
-		// 		lines := make([]string, len(subscriptions))
-		// 		for i, sub := range subscriptions {
-		// 			lines[i] = fmt.Sprintf("%d) %s, %s", i+1, sub.StreetName, sub.Building)
-		// 			buttons[i] = tgbotapi.NewInlineKeyboardButtonData(
-		// 				fmt.Sprintf("Видалити %d)", i+1),
-		// 				fmt.Sprintf("subdel:%d", sub.ID),
-		// 			)
-		// 		}
-		// 		message.Text = strings.Join(lines, "\n")
-		// 		message.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(wrapButtons(2, buttons)...)
-		// 	}
-
-		// 	if _, err := bot.Send(message); err != nil {
-		// 		log.Panic(err)
-		// 	}
-		// }
-
-		// commandProcessor.Command("list", showSubscriptionsList)
-		// commandProcessor.Callback(`subdel:(\d+)`, func(ctx *CommandHandlerContext) {
-		// 	chatID := ctx.chatID
-		// 	id, err := strconv.ParseInt(ctx.matches[1], 10, 64)
-		// 	if err != nil {
-		// 		log.Panic("Could not parse")
-		// 	}
-		// 	sub := &models.Subscription{}
-		// 	db.Where("id = ? AND chat_id = ?", id, chatID).First(sub)
-		// 	db.Delete(sub)
-		// 	bot.DeleteMessage(tgbotapi.NewDeleteMessage(
-		// 		chatID,
-		// 		ctx.update.CallbackQuery.Message.MessageID,
-		// 	))
-		// 	showSubscriptionsList(ctx)
-		// })
 
 		for update := range updates {
 			commandProcessor.Process(&update)

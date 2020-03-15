@@ -1,8 +1,8 @@
 package sessionmanager
 
 import (
-	"github.com/corporateanon/my1562bot/pkg/models"
 	"github.com/jinzhu/gorm"
+	"github.com/my1562/telegrambot/pkg/models"
 )
 
 type SessionManager struct {

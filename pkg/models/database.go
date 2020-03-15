@@ -1,10 +1,10 @@
 package models
 
 import (
-	"github.com/corporateanon/my1562bot/pkg/config"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/my1562/telegrambot/pkg/config"
 )
 
 type Phase string

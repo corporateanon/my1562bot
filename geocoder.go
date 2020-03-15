@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/corporateanon/my1562bot/pkg/config"
+	"github.com/my1562/telegrambot/pkg/config"
 	"github.com/corporateanon/my1562geocoder"
 )
 
