@@ -10,7 +10,7 @@ RUN go install -v ./...
 #final stage
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
-COPY --from=builder /go/bin/my1562bot /app
+COPY --from=builder /go/bin/telegrambot /app
 ENTRYPOINT ./app
 LABEL Name=my1562bot Version=0.0.1
 
