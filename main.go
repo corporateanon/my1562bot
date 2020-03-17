@@ -7,12 +7,9 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/jinzhu/gorm"
 	"github.com/my1562/geocoder"
 	"github.com/my1562/telegrambot/pkg/apiclient"
 	"github.com/my1562/telegrambot/pkg/config"
-	"github.com/my1562/telegrambot/pkg/models"
-	"github.com/my1562/telegrambot/pkg/sessionmanager"
 	"go.uber.org/dig"
 )
 
@@ -22,8 +19,6 @@ func main() {
 	c.Provide(config.NewConfig)
 	c.Provide(NewBotAPI)
 	c.Provide(NewCommandProcessor)
-	c.Provide(models.NewDatabase)
-	c.Provide(sessionmanager.NewSessionManager)
 	c.Provide(NewGeocoder)
 	c.Provide(func(conf *config.Config) *resty.Client {
 		client := resty.New().SetHostURL(conf.APIURL)
@@ -34,12 +29,9 @@ func main() {
 	if err := c.Invoke(func(
 		bot *tgbotapi.BotAPI,
 		commandProcessor *CommandProcessor,
-		db *gorm.DB,
-		sessMgr *sessionmanager.SessionManager,
 		geo *geocoder.Geocoder,
 		api *apiclient.ApiClient,
 	) {
-		defer db.Close()
 		log.Printf("Authorized on account %s", bot.Self.UserName)
 		u := tgbotapi.NewUpdate(0)
 		u.Timeout = 60

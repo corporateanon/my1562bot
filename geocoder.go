@@ -8,8 +8,7 @@ import (
 )
 
 func NewGeocoder(conf *config.Config) (*geocoder.Geocoder, error) {
-	//TODO: add config param
-	geo := geocoder.NewGeocoder("./data/gobs/geocoder-data.gob")
+	geo := geocoder.NewGeocoder()
 	geo.BuildSpatialIndex(100)
 	return geo, nil
 }
