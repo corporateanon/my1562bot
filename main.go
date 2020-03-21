@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/my1562/geocoder"
 	"github.com/my1562/telegrambot/pkg/apiclient"
 	"github.com/my1562/telegrambot/pkg/config"
 	"go.uber.org/dig"
@@ -19,7 +18,6 @@ func main() {
 	c.Provide(config.NewConfig)
 	c.Provide(NewBotAPI)
 	c.Provide(NewCommandProcessor)
-	c.Provide(NewGeocoder)
 	c.Provide(func(conf *config.Config) *resty.Client {
 		client := resty.New().SetHostURL(conf.APIURL)
 		return client
@@ -29,7 +27,6 @@ func main() {
 	if err := c.Invoke(func(
 		bot *tgbotapi.BotAPI,
 		commandProcessor *CommandProcessor,
-		geo *geocoder.Geocoder,
 		api *apiclient.ApiClient,
 	) {
 		log.Printf("Authorized on account %s", bot.Self.UserName)
@@ -47,14 +44,18 @@ func main() {
 
 		commandProcessor.Location(func(ctx *CommandHandlerContext) {
 			lat, lng := ctx.update.Message.Location.Latitude, ctx.update.Message.Location.Longitude
-			geocodingResults := geo.ReverseGeocode(lat, lng, 300, 10)
+			geocodingResult, err := api.Geocode(lat, lng, 300)
+			if err != nil {
+				log.Panic(err)
+			}
+			addresses := geocodingResult.Addresses
 
-			results := make([][]tgbotapi.InlineKeyboardButton, len(geocodingResults))
-			for i, geoRes := range geocodingResults {
+			results := make([][]tgbotapi.InlineKeyboardButton, len(addresses))
+			for i, address := range addresses {
 				results[i] = tgbotapi.NewInlineKeyboardRow(
 					tgbotapi.NewInlineKeyboardButtonData(
-						FormatGeocodingResult(geoRes),
-						fmt.Sprintf("subAddr:%d", geoRes.FullAddress.Address.ID),
+						address.AddressString,
+						fmt.Sprintf("subAddr:%d", address.ID),
 					),
 				)
 			}
@@ -69,17 +70,12 @@ func main() {
 		commandProcessor.Callback(`subAddr:(\d+)`, func(ctx *CommandHandlerContext) {
 			fmt.Println(ctx.matches)
 
-			addressIDAr, err := strconv.ParseUint(ctx.matches[1], 10, 64)
+			addressIDAr, err := strconv.ParseInt(ctx.matches[1], 10, 64)
 			if err != nil {
 				panic(err)
 			}
 
-			addr := geo.AddressByID(uint32(addressIDAr))
-			if addr == nil {
-				panic("No such address") //TODO: send it as a message
-			}
-
-			err = api.CreateSubscription(ctx.chatID, int64(addr.Address.ID))
+			err = api.CreateSubscription(ctx.chatID, addressIDAr)
 			if err != nil {
 				panic(err)
 			}
