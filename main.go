@@ -9,6 +9,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/my1562/telegrambot/pkg/apiclient"
 	"github.com/my1562/telegrambot/pkg/config"
+	mock_apiclient "github.com/my1562/telegrambot/pkg/mockApiclient"
 	"go.uber.org/dig"
 )
 
@@ -22,12 +23,18 @@ func main() {
 		client := resty.New().SetHostURL(conf.APIURL)
 		return client
 	})
-	c.Provide(apiclient.New)
+	c.Provide(func(conf *config.Config, client *resty.Client) apiclient.IApiClient {
+		if conf.EmualteAPI {
+			return mock_apiclient.New()
+		} else {
+			return apiclient.New(client)
+		}
+	})
 
 	if err := c.Invoke(func(
 		bot *tgbotapi.BotAPI,
 		commandProcessor *CommandProcessor,
-		api *apiclient.ApiClient,
+		api apiclient.IApiClient,
 	) {
 		log.Printf("Authorized on account %s", bot.Self.UserName)
 		u := tgbotapi.NewUpdate(0)
@@ -37,10 +44,6 @@ func main() {
 		if err != nil {
 			log.Panic(err)
 		}
-
-		commandProcessor.Hears(`^hello`, func(ctx *CommandHandlerContext) {
-			fmt.Println(ctx.matches)
-		})
 
 		commandProcessor.Location(func(ctx *CommandHandlerContext) {
 			lat, lng := ctx.update.Message.Location.Latitude, ctx.update.Message.Location.Longitude
@@ -60,24 +63,36 @@ func main() {
 				)
 			}
 
-			msg := tgbotapi.NewMessage(ctx.chatID, "Оберіть свою адресу зі списку")
+			msg := tgbotapi.NewMessage(ctx.chatID, "Выберите свой адрес из списка")
 			msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(results...)
 
 			if _, err := bot.Send(msg); err != nil {
 				log.Panic(err)
 			}
 		})
+
 		commandProcessor.Callback(`subAddr:(\d+)`, func(ctx *CommandHandlerContext) {
-			fmt.Println(ctx.matches)
 
 			addressIDAr, err := strconv.ParseInt(ctx.matches[1], 10, 64)
 			if err != nil {
-				panic(err)
+				log.Panic(err)
 			}
+			log.Printf("Subscribe to: addressID:%d, chatID:%d", addressIDAr, ctx.chatID)
 
 			err = api.CreateSubscription(ctx.chatID, addressIDAr)
 			if err != nil {
-				panic(err)
+				log.Panic(err)
+			}
+
+			addressString, err := api.AddressStringByID(addressIDAr)
+			if err != nil {
+				log.Panic(err)
+			}
+
+			msgText := "Вы подписались на обновления для адреса:\n" + addressString
+			msg := tgbotapi.NewMessage(ctx.chatID, msgText)
+			if _, err := bot.Send(msg); err != nil {
+				log.Panic(err)
 			}
 		})
 
