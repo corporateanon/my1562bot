@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	TGToken string
-	APIURL  string
+	TGToken    string
+	APIURL     string
+	EmualteAPI bool
 }
 
 func NewConfig() (*Config, error) {
@@ -25,7 +26,8 @@ func NewConfig() (*Config, error) {
 		fmt.Println(err)
 	}
 	return &Config{
-		TGToken: os.Getenv("TELEGRAM_APITOKEN"),
-		APIURL:  os.Getenv("API_URL"),
+		TGToken:    os.Getenv("TELEGRAM_APITOKEN"),
+		APIURL:     os.Getenv("API_URL"),
+		EmualteAPI: os.Getenv("EMULATE_API") == "true",
 	}, nil
 }

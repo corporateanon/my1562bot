@@ -6,11 +6,21 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+type IApiClient interface {
+	CreateSubscription(chatID int64, addressArID int64) error
+	Geocode(
+		lat float64,
+		lng float64,
+		accuracy float64,
+	) (*GeocodeResponse, error)
+	AddressStringByID(ID int64) (string, error)
+}
+
 type ApiClient struct {
 	client *resty.Client
 }
 
-func New(client *resty.Client) *ApiClient {
+func New(client *resty.Client) IApiClient {
 	return &ApiClient{client: client}
 }
 
@@ -37,7 +47,6 @@ func (api *ApiClient) CreateSubscription(chatID int64, addressArID int64) error 
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -79,4 +88,36 @@ func (api *ApiClient) Geocode(
 	}
 	result := resp.Result()
 	return result.(*Response).Result, nil
+}
+
+type AddressLookupResponse struct {
+	Address struct {
+		Address string
+	}
+}
+
+func (api *ApiClient) AddressStringByID(
+	ID int64,
+) (string, error) {
+	type Response struct {
+		Result *AddressLookupResponse
+	}
+
+	resp, err := api.client.R().
+		SetResult(&Response{}).
+		SetError(&ErrorResponse{}).
+		SetPathParams(
+			map[string]string{
+				"id": strconv.FormatInt(ID, 10),
+			},
+		).
+		Get("/address/geocode/lookup/{id}")
+	if err != nil {
+		return "", err
+	}
+	if backendError := resp.Error(); backendError != nil {
+		return "", backendError.(*ErrorResponse)
+	}
+	result := resp.Result()
+	return result.(*Response).Result.Address.Address, nil
 }
