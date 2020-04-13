@@ -1,7 +1,6 @@
 package apiclient
 
 import (
-	"errors"
 	"strconv"
 
 	"github.com/go-resty/resty/v2"
@@ -91,33 +90,34 @@ func (api *ApiClient) Geocode(
 	return result.(*Response).Result, nil
 }
 
-type AddressResponse struct {
+type AddressLookupResponse struct {
+	Address struct {
+		Address string
+	}
 }
 
 func (api *ApiClient) AddressStringByID(
 	ID int64,
 ) (string, error) {
-	// type Response struct {
-	// 	Result *AddressResponse
-	// }
+	type Response struct {
+		Result *AddressLookupResponse
+	}
 
-	// resp, err := api.client.R().
-	// 	SetResult(&Response{}).
-	// 	SetError(&ErrorResponse{}).
-	// 	SetPathParams(
-	// 		map[string]string{
-	// 			"id": strconv.FormatInt(ID, 10),
-	// 		},
-	// 	).
-	// 	Get("/address/{id}")
-	// if err != nil {
-	// 	return "", err
-	// }
-	// if backendError := resp.Error(); backendError != nil {
-	// 	return "", backendError.(*ErrorResponse)
-	// }
-	// result := resp.Result()
-	// return result.(*Response).Result, nil
-
-	return "", errors.New("Not implemented")
+	resp, err := api.client.R().
+		SetResult(&Response{}).
+		SetError(&ErrorResponse{}).
+		SetPathParams(
+			map[string]string{
+				"id": strconv.FormatInt(ID, 10),
+			},
+		).
+		Get("/address/geocode/lookup/{id}")
+	if err != nil {
+		return "", err
+	}
+	if backendError := resp.Error(); backendError != nil {
+		return "", backendError.(*ErrorResponse)
+	}
+	result := resp.Result()
+	return result.(*Response).Result.Address.Address, nil
 }
