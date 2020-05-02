@@ -79,7 +79,7 @@ func (api *ApiClient) Geocode(
 				"accuracy": strconv.FormatFloat(accuracy, 'f', -1, 64),
 			},
 		).
-		Get("/address/geocode/{lat}/{lng}/{accuracy}")
+		Get("/address-geocode/{lat}/{lng}/{accuracy}")
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (api *ApiClient) AddressStringByID(
 				"id": strconv.FormatInt(ID, 10),
 			},
 		).
-		Get("/address/geocode/lookup/{id}")
+		Get("/address-lookup/{id}")
 	if err != nil {
 		return "", err
 	}
