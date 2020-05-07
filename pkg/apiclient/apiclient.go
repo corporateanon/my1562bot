@@ -2,18 +2,16 @@ package apiclient
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 )
 
 type IApiClient interface {
 	CreateSubscription(chatID int64, addressArID int64) error
-	Geocode(
-		lat float64,
-		lng float64,
-		accuracy float64,
-	) (*GeocodeResponse, error)
+	Geocode(lat float64, lng float64, accuracy float64) (*GeocodeResponse, error)
 	AddressStringByID(ID int64) (string, error)
+	AddressByID(ID int64) (*AddressByIDResponse, error)
 }
 
 type ApiClient struct {
@@ -120,4 +118,51 @@ func (api *ApiClient) AddressStringByID(
 	}
 	result := resp.Result()
 	return result.(*Response).Result.Address.Address, nil
+}
+
+type AddressArCheckStatus string
+
+const (
+	AddressStatusNoWork AddressArCheckStatus = "nowork"
+	AddressStatusWork                        = "work"
+	AddressStatusInit                        = "init"
+)
+
+type AddressByIDResponse struct {
+	ID             int64
+	CheckStatus    AddressArCheckStatus
+	ServiceMessage string
+	Hash           string
+	TakenAt        time.Time
+	CheckedAt      time.Time
+}
+
+func (api *ApiClient) AddressByID(
+	ID int64,
+) (*AddressByIDResponse, error) {
+	type Response struct {
+		Result *AddressByIDResponse
+	}
+
+	resp, err := api.client.R().
+		SetResult(&Response{}).
+		SetError(&ErrorResponse{}).
+		SetPathParams(
+			map[string]string{
+				"id": strconv.FormatInt(ID, 10),
+			},
+		).
+		Get("/address/{id}")
+	if err != nil {
+		return nil, err
+	}
+	if backendError := resp.Error(); backendError != nil {
+		//Normal case - address not yet exists
+		if resp.StatusCode() == 404 {
+			return nil, nil
+		}
+		return nil, backendError.(*ErrorResponse)
+	}
+	result := resp.Result()
+	return result.(*Response).Result, nil
 }

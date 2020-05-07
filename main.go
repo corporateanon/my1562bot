@@ -10,8 +10,31 @@ import (
 	"github.com/my1562/telegrambot/pkg/apiclient"
 	"github.com/my1562/telegrambot/pkg/config"
 	mock_apiclient "github.com/my1562/telegrambot/pkg/mockApiclient"
+	"github.com/my1562/telegrambot/pkg/priorityChecker"
 	"go.uber.org/dig"
 )
+
+func getAddressStatusMessage(
+	message string,
+	addressString string,
+	addressStatus apiclient.AddressArCheckStatus,
+) string {
+
+	introduction := ""
+	emojiIcon := ""
+
+	if addressStatus == apiclient.AddressStatusNoWork {
+		introduction = "Работы не проводятся"
+		emojiIcon = "✅"
+	}
+	if addressStatus == apiclient.AddressStatusWork {
+		introduction = ""
+		emojiIcon = "🛠"
+	}
+
+	fullMessageText := emojiIcon + " " + addressString + ": " + introduction + "\n\n" + message
+	return fullMessageText
+}
 
 func main() {
 
@@ -26,16 +49,18 @@ func main() {
 	c.Provide(func(conf *config.Config, client *resty.Client) apiclient.IApiClient {
 		if conf.EmualteAPI {
 			return mock_apiclient.New()
-		} else {
-			return apiclient.New(client)
 		}
+		return apiclient.New(client)
 	})
+	c.Provide(priorityChecker.NewPriorityChecker)
 
 	if err := c.Invoke(func(
 		bot *tgbotapi.BotAPI,
 		commandProcessor *CommandProcessor,
 		api apiclient.IApiClient,
+		priorityChecker *priorityChecker.PriorityChecker,
 	) {
+
 		log.Printf("Authorized on account %s", bot.Self.UserName)
 		u := tgbotapi.NewUpdate(0)
 		u.Timeout = 60
@@ -89,9 +114,26 @@ func main() {
 				log.Panic(err)
 			}
 
-			msgText := "Вы подписались на обновления для адреса:\n" + addressString
+			addressAr, err := api.AddressByID(addressIDAr)
+			if err != nil {
+				log.Panic(err)
+			}
+			if addressAr != nil && addressAr.CheckStatus != apiclient.AddressStatusInit {
+				msgText := getAddressStatusMessage(addressAr.ServiceMessage, addressString, addressAr.CheckStatus)
+				msg := tgbotapi.NewMessage(ctx.chatID, msgText)
+				if _, err := bot.Send(msg); err != nil {
+					log.Panic(err)
+				}
+			}
+
+			msgText := "Вы подписались на обновления для адреса: " + addressString + ".\nКак только появится новая информация по вашему адресу, мы отправим вам сообщение"
 			msg := tgbotapi.NewMessage(ctx.chatID, msgText)
 			if _, err := bot.Send(msg); err != nil {
+				log.Panic(err)
+			}
+
+			log.Printf("Enqueueing priority check for address (ID=%d): %s\n", addressIDAr, addressString)
+			if err := priorityChecker.EnqueuePriorityCheck(addressIDAr); err != nil {
 				log.Panic(err)
 			}
 		})

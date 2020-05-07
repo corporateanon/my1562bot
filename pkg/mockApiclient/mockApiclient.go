@@ -29,3 +29,9 @@ func (api *MockApiClient) AddressStringByID(
 ) (string, error) {
 	return "221b Baker st.", nil
 }
+
+func (api *MockApiClient) AddressByID(
+	ID int64,
+) (*apiclient.AddressByIDResponse, error) {
+	return nil, nil
+}
