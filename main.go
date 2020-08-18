@@ -150,7 +150,6 @@ func main() {
 			}
 			query := ctx.matches[0]
 
-			log.Println("AAAA", query)
 			addresses, err := api.FullTextSearch(query)
 			if err != nil {
 				log.Panic(err)
