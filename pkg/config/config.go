@@ -10,6 +10,7 @@ import (
 type Config struct {
 	TGToken    string
 	APIURL     string
+	FTSURL     string
 	Redis      string
 	EmualteAPI bool
 }
@@ -29,6 +30,7 @@ func NewConfig() (*Config, error) {
 	config := &Config{
 		TGToken:    os.Getenv("TELEGRAM_APITOKEN"),
 		APIURL:     os.Getenv("API_URL"),
+		FTSURL:     os.Getenv("FTS_URL"),
 		EmualteAPI: os.Getenv("EMULATE_API") == "true",
 		Redis:      os.Getenv("REDIS"),
 	}

@@ -5,21 +5,34 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"go.uber.org/dig"
 )
 
 type IApiClient interface {
 	CreateSubscription(chatID int64, addressArID int64) error
 	Geocode(lat float64, lng float64, accuracy float64) (*GeocodeResponse, error)
+	FullTextSearch(query string) ([]FullTextSearchAddress, error)
 	AddressStringByID(ID int64) (string, error)
 	AddressByID(ID int64) (*AddressByIDResponse, error)
 }
 
 type ApiClient struct {
-	client *resty.Client
+	client    *resty.Client
+	ftsClient *resty.Client
 }
 
-func New(client *resty.Client) IApiClient {
-	return &ApiClient{client: client}
+type ApiClientOptions struct {
+	dig.In
+
+	Client    *resty.Client `name:"api"`
+	FTSClient *resty.Client `name:"fts"`
+}
+
+func New(options ApiClientOptions) IApiClient {
+	return &ApiClient{
+		client:    options.Client,
+		ftsClient: options.FTSClient,
+	}
 }
 
 type ErrorResponse struct {
@@ -86,6 +99,32 @@ func (api *ApiClient) Geocode(
 	}
 	result := resp.Result()
 	return result.(*Response).Result, nil
+}
+
+type FullTextSearchAddress struct {
+	ID         uint32
+	Label      string
+	Similarity float32
+}
+
+func (api *ApiClient) FullTextSearch(query string) ([]FullTextSearchAddress, error) {
+	resp, err := api.ftsClient.R().
+		SetResult([]FullTextSearchAddress{}).
+		SetError(&ErrorResponse{}).
+		SetBody(
+			map[string]string{
+				"query": query,
+			},
+		).
+		Post("/")
+	if err != nil {
+		return nil, err
+	}
+	if backendError := resp.Error(); backendError != nil {
+		return nil, backendError.(*ErrorResponse)
+	}
+	result := resp.Result()
+	return *result.(*[]FullTextSearchAddress), nil
 }
 
 type AddressLookupResponse struct {

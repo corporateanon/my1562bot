@@ -35,3 +35,18 @@ func (api *MockApiClient) AddressByID(
 ) (*apiclient.AddressByIDResponse, error) {
 	return nil, nil
 }
+
+func (api *MockApiClient) FullTextSearch(query string) ([]apiclient.FullTextSearchAddress, error) {
+	return []apiclient.FullTextSearchAddress{
+		{
+			ID:         100,
+			Label:      "Some Street, 100",
+			Similarity: 0.5,
+		},
+		{
+			ID:         101,
+			Label:      "Some Street, 101",
+			Similarity: 0.33,
+		},
+	}, nil
+}
